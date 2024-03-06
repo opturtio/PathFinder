@@ -13,6 +13,7 @@ namespace PathFinder.DataStructures
         private Stopwatch jpsStopwatch;
         private int visitedNodes = 0;
         private bool pathFound = false;
+        private PriorityQueue<Node, double> forcedNeighbors;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="JPS"/> class.
@@ -24,6 +25,7 @@ namespace PathFinder.DataStructures
             this.graph = graph;
             this.pathVisualizer = visualizer;
             this.jpsStopwatch = new Stopwatch();
+            this.forcedNeighbors = new PriorityQueue<Node, double>();
         }
 
         /// <summary>
@@ -41,9 +43,23 @@ namespace PathFinder.DataStructures
             var successors = new PriorityQueue<Node, double>();
             successors.Enqueue(start, start.Cost);
 
-            while (successors.Count > 0)
+            Node currentNode = null;
+
+            while (successors.Count > 0 || this.forcedNeighbors.Count > 0)
             {
-                var currentNode = successors.Dequeue();
+                if (successors.Count > 0)
+                {
+                    currentNode = successors.Dequeue();
+                }
+                else if (this.forcedNeighbors.Count > 0)
+                {
+                    currentNode = this.forcedNeighbors.Dequeue();
+                    Console.WriteLine(currentNode.GetNodeInfo());
+                }
+                else
+                {
+                    break;
+                }
 
                 this.visitedNodes++;
 
@@ -140,20 +156,14 @@ namespace PathFinder.DataStructures
                 if ((!this.graph.CanMove(nextNode.X + direction.x, nextNode.Y) && this.graph.CanMove(nextNode.X + direction.x, nextNode.Y + direction.y)) ||
                     (!this.graph.CanMove(nextNode.X, nextNode.Y + direction.y) && this.graph.CanMove(nextNode.X + direction.x, nextNode.Y + direction.y)))
                 {
+                    nextNode.Forced = true;
+                    this.AddForcedNeighbor(nextNode, end);
                     return nextNode;
                 }
 
-                Node? newNodeX = this.Jump(nextNode, (direction.x, 0), start, end);
-                Node? newNodeY = this.Jump(nextNode, (0, direction.y), start, end);
-
-                if (newNodeX != null)
+                if (this.Jump(nextNode, (direction.x, 0), start, end) != null || this.Jump(nextNode, (0, direction.y), start, end) != null)
                 {
-                    return newNodeX;
-                }
-
-                if (newNodeY != null)
-                {
-                    return newNodeY;
+                    return nextNode;
                 }
             }
             else
@@ -163,6 +173,8 @@ namespace PathFinder.DataStructures
                     if ((!this.graph.CanMove(nextNode.X, nextNode.Y + 1) && this.graph.CanMove(nextNode.X + direction.x, nextNode.Y + 1)) ||
                         (!this.graph.CanMove(nextNode.X, nextNode.Y - 1) && this.graph.CanMove(nextNode.X + direction.x, nextNode.Y - 1)))
                     {
+                        nextNode.Forced = true;
+                        this.AddForcedNeighbor(nextNode, end);
                         return nextNode;
                     }
                 }
@@ -171,12 +183,20 @@ namespace PathFinder.DataStructures
                     if ((!this.graph.CanMove(nextNode.X + 1, nextNode.Y) && this.graph.CanMove(nextNode.X + 1, nextNode.Y + direction.y)) ||
                         (!this.graph.CanMove(nextNode.X - 1, nextNode.Y) && this.graph.CanMove(nextNode.X - 1, nextNode.Y + direction.y)))
                     {
+                        nextNode.Forced = true;
+                        this.AddForcedNeighbor(nextNode, end);
                         return nextNode;
                     }
                 }
             }
 
             return this.Jump(nextNode, direction, start, end);
+        }
+
+        private void AddForcedNeighbor(Node forced, Node end)
+        {
+            double newCost = forced.Cost + this.Heuristic(forced, end);
+            this.forcedNeighbors.Enqueue(forced, newCost);
         }
 
         /// <summary>

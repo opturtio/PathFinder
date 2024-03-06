@@ -129,6 +129,10 @@
                     {
                         outputBuffer.Append('X');
                     }
+                    else if (node.Forced && node != this.endNode && this.isJps)
+                    {
+                        outputBuffer.Append('F');
+                    }
                     else if (node.JumpPoint && node != this.endNode && this.isJps)
                     {
                         outputBuffer.Append('J');
@@ -182,6 +186,10 @@
                     if (node.Visited)
                     {
                         outputBuffer.Append('#');
+                    }
+                    else if (jps == true && node.Forced && node != this.endNode)
+                    {
+                        outputBuffer.Append('F');
                     }
                     else if (jps == true && node.JumpPoint && node != this.endNode)
                     {

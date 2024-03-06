@@ -20,6 +20,7 @@
             this.Parent = null;
             this.Visited = false;
             this.JumpPoint = false;
+            this.Forced = false;
         }
 
         /// <summary>
@@ -56,6 +57,11 @@
         /// Gets or sets a value indicating whether the node is a jump point.
         /// </summary>
         public bool JumpPoint { get; set; }
+
+        /// <summary>
+        /// Gets or sets a value indicating whether the node is a forced neighbor.
+        /// </summary>
+        public bool Forced { get; set; }
 
         /// <summary>
         /// Returns a string that represents the current node.
