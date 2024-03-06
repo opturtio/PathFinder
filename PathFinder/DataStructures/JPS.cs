@@ -13,7 +13,9 @@ namespace PathFinder.DataStructures
         private Stopwatch jpsStopwatch;
         private int visitedNodes = 0;
         private bool pathFound = false;
+        private double currentCost = 0;
         private PriorityQueue<Node, double> forcedNeighbors;
+        private List<Node> forcedHelperList;
 
         /// <summary>
         /// Initializes a new instance of the <see cref="JPS"/> class.
@@ -26,6 +28,7 @@ namespace PathFinder.DataStructures
             this.pathVisualizer = visualizer;
             this.jpsStopwatch = new Stopwatch();
             this.forcedNeighbors = new PriorityQueue<Node, double>();
+            this.forcedHelperList = new List<Node>();
         }
 
         /// <summary>
@@ -45,25 +48,29 @@ namespace PathFinder.DataStructures
 
             Node currentNode = null;
 
-            while (successors.Count > 0 || this.forcedNeighbors.Count > 0)
+            while (successors.Count > 0 || this.forcedHelperList.Count > 0)
             {
                 if (successors.Count > 0)
                 {
                     currentNode = successors.Dequeue();
-                }
-                else if (this.forcedNeighbors.Count > 0)
-                {
-                    currentNode = this.forcedNeighbors.Dequeue();
-                    Console.WriteLine(currentNode.GetNodeInfo());
+                    this.currentCost = currentNode.Cost;
                 }
                 else
                 {
-                    break;
+                    foreach (var forcedNode in this.forcedHelperList)
+                    {
+                        double newCost = this.currentCost + this.Heuristic(forcedNode, end);
+                        forcedNode.Cost = newCost;
+                        // Console.WriteLine(forcedNode.GetNodeInfo());
+                        this.forcedNeighbors.Enqueue(forcedNode, newCost);
+                    }
+
+                    currentNode = this.forcedNeighbors.Dequeue();
                 }
 
                 this.visitedNodes++;
 
-                if (currentNode == end)
+                if (currentNode == end || this.pathFound)
                 {
                     this.pathFound = true;
                     break;
@@ -71,7 +78,7 @@ namespace PathFinder.DataStructures
 
                 foreach (var direction in this.GetDirections())
                 {
-                    var jumpPoint = this.Jump(currentNode, direction, start, end);
+                    var jumpPoint = this.Jump(currentNode, direction, start, end, currentNode.Cost);
 
                     if (jumpPoint == null)
                     {
@@ -121,7 +128,7 @@ namespace PathFinder.DataStructures
         /// <param name="direction">The direction to jump in.</param>
         /// <param name="end">The end node of the pathfinding process.</param>
         /// <returns>The jump point node if one is found, otherwise null.</returns>
-        private Node? Jump(Node currentNode, (int x, int y) direction, Node start, Node end)
+        private Node? Jump(Node currentNode, (int x, int y) direction, Node start, Node end, double currentCost)
         {
             int nextX = currentNode.X + direction.x;
             int nextY = currentNode.Y + direction.y;
@@ -147,6 +154,7 @@ namespace PathFinder.DataStructures
             // If we've reached the end, return this node
             if (nextNode == end)
             {
+                this.pathFound = true;
                 return nextNode;
             }
 
@@ -157,11 +165,11 @@ namespace PathFinder.DataStructures
                     (!this.graph.CanMove(nextNode.X, nextNode.Y + direction.y) && this.graph.CanMove(nextNode.X + direction.x, nextNode.Y + direction.y)))
                 {
                     nextNode.Forced = true;
-                    this.AddForcedNeighbor(nextNode, end);
+                    this.AddForcedNeighbor(nextNode);
                     return nextNode;
                 }
 
-                if (this.Jump(nextNode, (direction.x, 0), start, end) != null || this.Jump(nextNode, (0, direction.y), start, end) != null)
+                if (this.Jump(nextNode, (direction.x, 0), start, end, currentCost) != null || this.Jump(nextNode, (0, direction.y), start, end, currentCost) != null)
                 {
                     return nextNode;
                 }
@@ -174,7 +182,7 @@ namespace PathFinder.DataStructures
                         (!this.graph.CanMove(nextNode.X, nextNode.Y - 1) && this.graph.CanMove(nextNode.X + direction.x, nextNode.Y - 1)))
                     {
                         nextNode.Forced = true;
-                        this.AddForcedNeighbor(nextNode, end);
+                        this.AddForcedNeighbor(nextNode);
                         return nextNode;
                     }
                 }
@@ -184,19 +192,129 @@ namespace PathFinder.DataStructures
                         (!this.graph.CanMove(nextNode.X - 1, nextNode.Y) && this.graph.CanMove(nextNode.X - 1, nextNode.Y + direction.y)))
                     {
                         nextNode.Forced = true;
-                        this.AddForcedNeighbor(nextNode, end);
+                        this.AddForcedNeighbor(nextNode);
                         return nextNode;
                     }
                 }
             }
 
-            return this.Jump(nextNode, direction, start, end);
+            if (currentCost < 10)
+            {
+                if (this.CheckIfGoal(nextNode, end))
+                {
+                    return nextNode;
+                }
+            }
+
+            return this.Jump(nextNode, direction, start, end, currentCost);
         }
 
-        private void AddForcedNeighbor(Node forced, Node end)
+        private bool CheckIfGoal(Node nextNode, Node end)
         {
-            double newCost = forced.Cost + this.Heuristic(forced, end);
-            this.forcedNeighbors.Enqueue(forced, newCost);
+            int[] dx = new int[] { -1, 1, 0, 0, -1, -1, 1, 1 };
+            int[] dy = new int[] { 0, 0, -1, 1, -1, 1, -1, 1 };
+
+            for (int i = 0; i < 8; i++)
+            {
+                int newX = nextNode.X + dx[i];
+                int newY = nextNode.Y + dy[i];
+
+                if (newX == end.X && newY == end.Y)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void AddForcedNeighbor(Node forced)
+        {
+            this.forcedHelperList.Add(forced);
+            var neighbors = this.PruneNeighbors(forced);
+            foreach (var neighbor in neighbors)
+            {
+                neighbor.Forced = true;
+                this.forcedHelperList.Add(neighbor);
+            }
+        }
+
+        private List<Node> PruneNeighbors(Node current)
+        {
+            List<Node> neighbors = new List<Node>();
+
+            if (current.Parent != null)
+            {
+                int x = current.X;
+                int y = current.Y;
+                int px = current.Parent.X;
+                int py = current.Parent.Y;
+
+                int dx = (x - px) / Math.Max(Math.Abs(x - px), 1);
+                int dy = (y - py) / Math.Max(Math.Abs(y - py), 1);
+
+                // search diagonally
+                if (dx != 0 && dy != 0)
+                {
+                    if (this.graph.CanMove(x, y + dy))
+                    {
+                        neighbors.Add(this.graph.Nodes[y + dy][x]);
+                    }
+                    if (this.graph.CanMove(x + dx, y))
+                    {
+                        neighbors.Add(this.graph.Nodes[y][x + dx]);
+                    }
+                    if (this.graph.CanMove(x + dx, y + dy))
+                    {
+                        neighbors.Add(this.graph.Nodes[y + dy][x + dx]);
+                    }
+                    if (!this.graph.CanMove(x - dx, y))
+                    {
+                        neighbors.Add(this.graph.Nodes[y + dy][x - dx]);
+                    }
+                    if (!this.graph.CanMove(x, y - dy))
+                    {
+                        neighbors.Add(this.graph.Nodes[y - dy][x + dx]);
+                    }
+                }
+
+                // search horizontally/vertically
+                else
+                {
+                    if (dx == 0)
+                    {
+                        if (this.graph.CanMove(x, y + dy))
+                        {
+                            neighbors.Add(this.graph.Nodes[y + dy][x]);
+                        }
+                        if (!this.graph.CanMove(x + 1, y))
+                        {
+                            neighbors.Add(this.graph.Nodes[y + dy][x + 1]);
+                        }
+                        if (!this.graph.CanMove(x - 1, y))
+                        {
+                            neighbors.Add(this.graph.Nodes[y + dy][x - 1]);
+                        }
+                    }
+                    else
+                    {
+                        if (this.graph.CanMove(x + dx, y))
+                        {
+                            neighbors.Add(this.graph.Nodes[y][x + dx]);
+                        }
+                        if (!this.graph.CanMove(x, y + 1))
+                        {
+                            neighbors.Add(this.graph.Nodes[y + 1][x + dx]);
+                        }
+                        if (!this.graph.CanMove(x, y - 1))
+                        {
+                            neighbors.Add(this.graph.Nodes[y - 1][x + dx]);
+                        }
+                    }
+                }
+            }
+
+            return neighbors;
         }
 
         /// <summary>

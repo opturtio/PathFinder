@@ -82,6 +82,7 @@
             this.shortestPathDijkstra = this.dijkstra.FindShortestPath(this.graph.Nodes[coords[0]][coords[1]], this.graph.Nodes[coords[2]][coords[3]]);
             this.shortestPathLengthDijkstra = ShortestPathBuilder.ShortestPathLength(this.graph.Nodes[coords[2]][coords[3]]);
 
+            
             if (this.jps.IsPathFound() && this.aStar.IsPathFound() && this.dijkstra.IsPathFound())
             {
                 this.PrintResults();
@@ -90,6 +91,7 @@
             {
                 Console.WriteLine("No paths found!\n");
             }
+            
         }
 
         /// <summary>
