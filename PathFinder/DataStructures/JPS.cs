@@ -70,7 +70,7 @@ namespace PathFinder.DataStructures
 
                         jumpPoint.JumpPoint = true;
 
-                        successors.Enqueue(jumpPoint, newCost);
+                        successors.Enqueue(jumpPoint, -newCost);
                     }
                 }
             }
