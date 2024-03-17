@@ -53,9 +53,9 @@ namespace PathFinder.DataStructures
                     break;
                 }
 
-                foreach (var direction in this.GetDirections())
+                foreach (var direction in this.GetStraightMoves())
                 {
-                    var jumpPoint = this.Jump(currentNode, direction, start, end);
+                    var jumpPoint = this.JumpStraight(currentNode, direction, start, end);
 
                     if (jumpPoint == null)
                     {
@@ -64,14 +64,29 @@ namespace PathFinder.DataStructures
 
                     double newCost = currentNode.Cost + this.Heuristic(jumpPoint, end);
 
-                    if (newCost < jumpPoint.Cost)
+                    jumpPoint.Cost = newCost;
+
+                    jumpPoint.JumpPoint = true;
+
+                    successors.Enqueue(jumpPoint, newCost);
+                }
+
+                foreach (var direction in this.GetDiagonalMoves())
+                {
+                    var jumpPoint = this.JumpDiagonal(currentNode, direction, start, end);
+
+                    if (jumpPoint == null)
                     {
-                        jumpPoint.Cost = newCost;
-
-                        jumpPoint.JumpPoint = true;
-
-                        successors.Enqueue(jumpPoint, -newCost);
+                        continue;
                     }
+
+                    double newCost = currentNode.Cost + this.Heuristic(jumpPoint, end);
+
+                    jumpPoint.Cost = newCost;
+
+                    jumpPoint.JumpPoint = true;
+
+                    successors.Enqueue(jumpPoint, newCost);
                 }
             }
 
@@ -89,13 +104,14 @@ namespace PathFinder.DataStructures
         /// Generates potential directions for movement..
         /// </summary>
         /// <returns>A list of tuples representing the possible directions for movement.</returns>
-        private IEnumerable<(int x, int y)> GetDirections()
+        private IEnumerable<(int y, int x)> GetStraightMoves()
         {
-            return new List<(int x, int y)>
-            {
-                (0, -1), (1, 0), (0, 1), (-1, 0),
-                (1, -1), (1, 1), (-1, 1), (-1, -1),
-            };
+            return new List<(int y, int x)> { (-1, 0), (1, 0), (0, -1), (0, 1) };
+        }
+
+        private IEnumerable<(int y, int x)> GetDiagonalMoves()
+        {
+            return new List<(int y, int x)> { (-1, -1), (1, 1), (1, -1), (-1, 1) };
         }
 
         /// <summary>
@@ -105,78 +121,139 @@ namespace PathFinder.DataStructures
         /// <param name="direction">The direction to jump in.</param>
         /// <param name="end">The end node of the pathfinding process.</param>
         /// <returns>The jump point node if one is found, otherwise null.</returns>
-        private Node? Jump(Node currentNode, (int x, int y) direction, Node start, Node end)
+        private Node? JumpStraight(Node currentNode, (int y, int x) direction, Node start, Node end)
         {
-            int nextX = currentNode.X + direction.x;
-            int nextY = currentNode.Y + direction.y;
+            var distance = currentNode.Cost;
+            int mapLength = this.graph.MapLength();
+            int mapWidth = this.graph.MapWidth();
 
-            // Check if next position is within bounds and not an obstacle
-            if (!this.graph.CanMove(nextX, nextY))
+            while (true)
             {
-                return null;
-            }
+                int nextX = currentNode.X + direction.x;
+                int nextY = currentNode.Y + direction.y;
+                distance++;
 
-            Node nextNode = this.graph.Nodes[nextY][nextX];
-
-            if (nextNode.Visited)
-            {
-                return null;
-            }
-
-            nextNode.Visited = true;
-            nextNode.Parent = currentNode;
-
-            this.pathVisualizer.VisualizePath(nextNode, start, end, true);
-
-            // If we've reached the end, return this node
-            if (nextNode == end)
-            {
-                return nextNode;
-            }
-
-            // For diagonal movement, check for forced neighbors along both axes
-            if (direction.x != 0 && direction.y != 0)
-            {
-                if ((!this.graph.CanMove(nextNode.X + direction.x, nextNode.Y) && this.graph.CanMove(nextNode.X + direction.x, nextNode.Y + direction.y)) ||
-                    (!this.graph.CanMove(nextNode.X, nextNode.Y + direction.y) && this.graph.CanMove(nextNode.X + direction.x, nextNode.Y + direction.y)))
+                // Check if next position is within bounds and not an obstacle
+                if (!this.graph.CanMove(nextX, nextY))
                 {
-                    return nextNode;
+                    return null;
                 }
 
-                Node? newNodeX = this.Jump(nextNode, (direction.x, 0), start, end);
-                Node? newNodeY = this.Jump(nextNode, (0, direction.y), start, end);
+                Node nextNode = this.graph.Nodes[nextY][nextX];
 
-                if (newNodeX != null)
+                if (nextNode.Cost != double.MaxValue && distance > nextNode.Cost)
                 {
-                    return newNodeX;
+                    return null;
                 }
 
-                if (newNodeY != null)
+                nextNode.Parent = this.graph.Nodes[nextNode.Y - direction.y][nextNode.X - direction.x];
+
+                nextNode.Cost = distance;
+
+                nextNode.Visited = true;
+
+                this.pathVisualizer.VisualizePath(nextNode, start, end, true);
+
+                // If we've reached the end, return this node. TARKASTA TÄMÄ
+                if (currentNode == end)
                 {
-                    return newNodeY;
+                    nextNode.Cost = distance;
+                    return currentNode;
                 }
-            }
-            else
-            {
-                if (direction.x != 0)
+
+                if (direction.y == 0)
                 {
-                    if ((!this.graph.CanMove(nextNode.X, nextNode.Y + 1) && this.graph.CanMove(nextNode.X + direction.x, nextNode.Y + 1)) ||
-                        (!this.graph.CanMove(nextNode.X, nextNode.Y - 1) && this.graph.CanMove(nextNode.X + direction.x, nextNode.Y - 1)))
+                    if ((nextNode.Y + 1) < mapLength && nextNode.X - direction.x >= 0 && nextNode.X - direction.x < mapWidth)
                     {
-                        return nextNode;
+                        if (this.graph.Nodes[nextNode.Y + 1][nextNode.X - direction.x].IsObstacle)
+                        {
+                            return currentNode;
+                        }
+                    }
+
+                    if (nextNode.Y - 1 >= 0 && nextNode.X - direction.x >= 0 && nextNode.X - direction.x < mapWidth)
+                    {
+                        if (this.graph.Nodes[nextNode.Y - 1][nextNode.X - direction.x].IsObstacle)
+                        {
+                            return currentNode;
+                        }
                     }
                 }
                 else
                 {
-                    if ((!this.graph.CanMove(nextNode.X + 1, nextNode.Y) && this.graph.CanMove(nextNode.X + 1, nextNode.Y + direction.y)) ||
-                        (!this.graph.CanMove(nextNode.X - 1, nextNode.Y) && this.graph.CanMove(nextNode.X - 1, nextNode.Y + direction.y)))
+                    if ((nextNode.X + 1) < mapWidth && nextNode.Y - direction.y >= 0 && nextNode.Y - direction.y < mapLength)
                     {
-                        return nextNode;
+                        if (this.graph.Nodes[nextNode.Y - direction.y][nextNode.X + 1].IsObstacle)
+                        {
+                            return currentNode;
+                        }
+                    }
+
+                    if ((nextNode.X - 1) >= 0 && nextNode.Y - direction.y >= 0 && nextNode.Y - direction.y < mapLength)
+                    {
+                        if (this.graph.Nodes[nextNode.Y - direction.y][nextNode.X - 1].IsObstacle)
+                        {
+                            return currentNode;
+                        }
                     }
                 }
-            }
 
-            return this.Jump(nextNode, direction, start, end);
+            }
+        }
+
+        private Node? JumpDiagonal(Node currentNode, (int y, int x) direction, Node start, Node end)
+        {
+            var distance = currentNode.Cost;
+
+            while (true)
+            {
+                int nextX = currentNode.X + direction.x;
+                int nextY = currentNode.Y + direction.y;
+                distance += Math.Sqrt(2);
+
+                // Check if next position is within bounds and not an obstacle
+                if (!this.graph.CanMove(nextX, nextY))
+                {
+                    return null;
+                }
+
+                if (this.graph.Nodes[nextY - direction.y][nextX].IsObstacle || this.graph.Nodes[nextY][nextX - direction.x].IsObstacle)
+                {
+                    return null;
+                }
+
+                Node nextNode = this.graph.Nodes[nextY][nextX];
+
+                if (nextNode.Cost != double.MaxValue && distance > nextNode.Cost)
+                {
+                    return null;
+                }
+
+                nextNode.Cost = distance;
+
+                nextNode.Parent = this.graph.Nodes[nextNode.Y - direction.y][nextNode.X - direction.x];
+
+                nextNode.Visited = true;
+
+                this.pathVisualizer.VisualizePath(nextNode, start, end, true);
+
+                // If we've reached the end, return this node. TARKASTA TÄMÄ
+                if (currentNode == end)
+                {
+                    nextNode.Cost = distance;
+                    return currentNode;
+                }
+
+                if (this.JumpStraight(currentNode, (direction.y, 0), start, end) != null)
+                {
+                    return currentNode;
+                }
+
+                if (this.JumpStraight(currentNode, (0, direction.x), start, end) != null)
+                {
+                    return currentNode;
+                }
+            }
         }
 
         /// <summary>
@@ -195,7 +272,10 @@ namespace PathFinder.DataStructures
             Console.WriteLine($"jumpPoint.X: {jumpPoint.X}");
             Console.WriteLine($"jumpPoint.Y: {jumpPoint.Y}");
             */
-            return Math.Sqrt(Math.Pow(end.X - jumpPoint.X, 2) + Math.Pow(end.Y - jumpPoint.Y, 2));
+            double yDist = Math.Abs(jumpPoint.Y - end.Y);
+            double xDist = Math.Abs(jumpPoint.X - end.X);
+
+            return yDist + xDist + ((Math.Sqrt(2) - 2) * Math.Min(yDist, xDist));
         }
 
         /// <summary>

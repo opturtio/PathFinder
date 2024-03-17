@@ -107,5 +107,15 @@
                    x >= 0 && x < this.Nodes[y].Count &&
                    !this.Nodes[y][x].IsObstacle;
         }
+
+        public int MapLength()
+        {
+            return this.Nodes.Count;
+        }
+
+        public int MapWidth()
+        {
+            return this.Nodes[0].Count;
+        }
     }
 }
